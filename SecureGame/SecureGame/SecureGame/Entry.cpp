@@ -79,16 +79,12 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     if (!LoadEnclave())
         return 1;
 
-    Game game;
-    Client client("192.168.0.135", 12345);
+    Game game = Game();
+    Client client = Client("192.168.0.136", 12345); // private IP from testing environment, change this if needed
 
     if (!game.Init(&client))
         return 1;
     
-    if (!client.initial_handshake()) {
-        fputs("initial handshake failed. closing connection", stdout);
-        return 1;
-    }
     game.Loop(&client);
     return 0;
 }

@@ -1,4 +1,18 @@
-#include "Global.h"
+#include "Game.h"
+
+Game::Game() {
+    this->playerMove = (mv*)malloc(sizeof(mv));
+    this->gameData = (gData*)malloc(sizeof(gData));
+    this->send_buffer = (unsigned char*)malloc(PACKET_MAX);
+    this->recv_buffer = (unsigned char*)malloc(PACKET_MAX);
+    this->game_Status = 0;
+    this->side = 0;
+}
+
+Game::~Game() {
+    free(this->playerMove);
+    free(this->gameData);
+}
 
 bool Game::Init(Client* client)
 {
@@ -37,6 +51,12 @@ bool Game::Init(Client* client)
 
     if (!client->connectToServer()) {
         MessageBoxA(nullptr, "Failed to connect to server", "Error", MB_OK | MB_ICONERROR);
+        return false;
+    }
+
+    if (!client->initial_handshake(this->playerMove, &this->game_Status, &this->side)) {
+        MessageBoxA(nullptr, "Failed to complete handshake", "Error", MB_OK | MB_ICONERROR);
+        return false;
     }
 
     return true;
@@ -45,12 +65,12 @@ bool Game::Init(Client* client)
 void Game::RenderText(const char* text, int x, int y)
 {
     constexpr SDL_Color textColor = { 255, 255, 255, 255 };
-    if (SDL_Surface* surface = TTF_RenderText_Solid(m_Font, text, textColor))
+    if (SDL_Surface* surface = TTF_RenderText_Solid(this->m_Font, text, textColor))
     {
-        if (SDL_Texture* texture = SDL_CreateTextureFromSurface(m_Renderer, surface))
+        if (SDL_Texture* texture = SDL_CreateTextureFromSurface(this->m_Renderer, surface))
         {
             const SDL_Rect destRect = { x, y, surface->w, surface->h };
-            SDL_RenderCopy(m_Renderer, texture, nullptr, &destRect);
+            SDL_RenderCopy(this->m_Renderer, texture, nullptr, &destRect);
             SDL_DestroyTexture(texture);
         }
 
@@ -62,32 +82,16 @@ void Game::Tick(Client* client)
 {
     const Uint8* keystates = SDL_GetKeyboardState(nullptr);
 
-    static Uint32 lastTime = SDL_GetTicks();
-    const Uint32 currentTime = SDL_GetTicks();
-    const float deltaTime = (currentTime - lastTime) / 1000.0f;
-    lastTime = currentTime;
-
-    TICK_DATA data;
-    mv playerMovement;
-    data.DeltaTime = deltaTime;
-    if (keystates[SDL_SCANCODE_W]) {
-        playerMovement.player_w = 1;
-        playerMovement.player_s = 0;
+    if (this->game_Status != 2) {
+        MessageBoxA(nullptr, "Invalid game option", "Error", MB_OK | MB_ICONERROR);
+        return;
     }
-    else if (keystates[SDL_SCANCODE_S]) {
-        playerMovement.player_s = 1;
-        playerMovement.player_w = 0;
+    else {
+        if (!client->receive_packet(recv_buffer, sizeof(gData))) {
+            MessageBoxA(nullptr, "Failed to receive data from the server", "Error", MB_OK | MB_ICONERROR);
+            return;
+        }
     }
-
-    unsigned char send_buffer[PACKET_MAX];
-    unsigned char recv_buffer[PACKET_MAX];
-    memset(recv_buffer, 0, PACKET_MAX);
-    memset(send_buffer, 0, PACKET_MAX);
-    Pack(&playerMovement, send_buffer, PACKET_MAX);
-
-    client->send_packet(send_buffer, sizeof(send_buffer));
-
-    client->receive_packet(recv_buffer, PACKET_MAX);
 
     EnclaveInput InputData;
     memcpy(InputData.buffer, recv_buffer, PACKET_MAX);
@@ -132,6 +136,29 @@ void Game::Tick(Client* client)
     sprintf_s(scoreText, "%d - %d", InputData.state.left_score, InputData.state.right_score);
     RenderText(scoreText, WINDOW_WIDTH / 2 - 40, 20);
 
+    if (keystates[SDL_SCANCODE_W]) {
+        playerMove->player_w = 1;
+        playerMove->player_s = 0;
+    }
+    else if (keystates[SDL_SCANCODE_S]) {
+        playerMove->player_s = 1;
+        playerMove->player_w = 0;
+    }
+
+    this->playerMove->player_status = 'p';
+
+    if (!client->Pack(this->playerMove, send_buffer, sizeof(mv))) {
+        MessageBoxA(nullptr, "Failed to pack the data", "Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    if (!client->send_packet((void*)send_buffer, sizeof(mv))) {
+        MessageBoxA(nullptr, "Failed to send the packet", "Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    memset(recv_buffer, 0, PACKET_MAX);
+    memset(send_buffer, 0, PACKET_MAX);
 
     //data.KeyW = keystates[SDL_SCANCODE_W];
     //data.KeyS = keystates[SDL_SCANCODE_S];
@@ -189,22 +216,13 @@ void Game::Tick(Client* client)
 
 }
 
-int Game::Pack(playerMV* playerMovement, void* buffer, size_t bufferSize) {
-    if (bufferSize < sizeof(*playerMovement)) {
-        fputs("packet size limit exceeded", stdout);
-        return 0;
-    }
-    memcpy(buffer, playerMovement, sizeof(*playerMovement));
-    return 1;
-
-}
-
 void Game::Loop(Client* client)
 {
     constexpr int FPS = 240;
     constexpr int frameDelay = 1000 / FPS;
 
     bool running = true;
+
     while (running)
     {
         const Uint32 frameStart = SDL_GetTicks();

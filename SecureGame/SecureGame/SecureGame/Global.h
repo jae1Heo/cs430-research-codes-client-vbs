@@ -9,6 +9,9 @@
 
 #include "Game.h"
 #include "Shared.h"
+#include "Client.h"
+
+#pragma comment(lib, "onecore.lib")
 
 namespace Global
 {

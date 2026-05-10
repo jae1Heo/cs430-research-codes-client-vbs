@@ -4,3 +4,6 @@
 #include <wchar.h>
 
 #include "../SecureGame/Shared.h"
+
+#pragma comment(lib, "OneCore.lib")
+#pragma comment(lib, "Vertdll.lib")

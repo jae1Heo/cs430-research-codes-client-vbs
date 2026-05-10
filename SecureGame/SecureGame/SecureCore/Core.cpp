@@ -51,9 +51,10 @@ namespace Data {
     float right_paddle_x;
 }
 
+
 void Run(EnclaveInput* input)
 {   
-
+    // will decrypt first later
     // moving data to namespace
     size_t offset = 0;
     Data::left_score = *(uint16_t*)(input->buffer + offset);
@@ -80,7 +81,7 @@ void Run(EnclaveInput* input)
     Data::right_paddle_x = *(float*)(input->buffer + offset);
     offset += sizeof(float);
     
-
+    
     /*
     const float deltaTime = currentTick->DeltaTime;
 

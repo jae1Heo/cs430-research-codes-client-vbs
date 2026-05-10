@@ -4,6 +4,8 @@
 // Constructor / Destructor
 // =======================================================
 
+
+
 Client::Client(const char* ip, const unsigned short u_port)
 {
 	if (WSAStartup(MAKEWORD(2, 2), &this->wsaData) != 0) {
@@ -111,33 +113,81 @@ int Client::receive_packet(void* buffer, uint16_t packet_size) {
 	}
 }
 
-int Client::initial_handshake() {
+int Client::Pack(mv* playerMovement, void* buffer, size_t bufferSize) {
+	if (bufferSize < sizeof(mv)) {
+		fputs("packet size limit exceeded", stdout);
+		return 0;
+	}
+	memcpy(buffer, playerMovement, sizeof(mv));
+	return 1;
+
+}
+
+int Client::initial_handshake(mv* playerMovement, int* game_status, int* side) {
+	unsigned char* buffer = (unsigned char*)malloc(PACKET_MAX);
+	memset((void*)buffer, 0, PACKET_MAX);
 	
-	// sending join message to server
-	char init = 'j';
-	if (!send_packet(&init, sizeof(char))) {
-		fputs("cannot send initial packet", stdout);
+	if (*game_status > 0) {
+		fputs("handshake failed\n", stderr);
+		free(buffer);
 		return 0;
 	}
 
-	// waiting for response
-	char buffer[2];
-	if (!receive_packet(buffer, sizeof(char) * 2)) {
-		fputs("server is not responding", stdout);
-		return 0;
-	}
+	while (*game_status != 2) {
+		if (*game_status == 0) {
+			playerMovement->player_status = 'j';
+			playerMovement->player_w = 0;
+			playerMovement->player_s = 0;
 
-	if (buffer[0] == 's')
-	{
-		char ack = 'a';
-		if (!send_packet(&ack, sizeof(char))) {
-			fputs("failed to send ack to the server", stdout);
-			return 0;
+			if (!Pack(playerMovement, (void*)buffer, sizeof(mv))) {
+				fputs("error packing data\n", stderr);
+				free(buffer);
+				return 0;
+			}
+
+			if (!send_packet(buffer, sizeof(mv))) {
+				fputs("error sending packet\n", stderr);
+				free(buffer);
+				return 0;
+			}
+
+			memset((void*)buffer, 0, PACKET_MAX);
+			*game_status = 1;
 		}
-	}
-	else {
-		fputs("failed to listen to server", stdout);
-		return 0;
+		else if (*game_status == 1) {
+			if (!receive_packet(buffer, sizeof(mv))) {
+				fputs("error receiving packet\n", stderr);
+				free(buffer);
+				return 0;
+			}
+
+			fputs("successfully joined the game\n", stdout);
+			if (buffer[0] == 's') {
+				*side = (int)buffer[1];
+				playerMovement->player_status = 'a';
+				playerMovement->player_w = 0;
+				playerMovement->player_s = 0;
+
+				if(!Pack(playerMovement, buffer, sizeof(mv))) {
+					fputs("error packing data\n", stderr);
+					free(buffer);
+					return 0;
+				}
+
+				if (!send_packet(buffer, sizeof(mv))) {
+					fputs("error sending packet\n", stderr);
+					free(buffer);
+					return 0;
+				}
+
+				*game_status = 2;
+			}
+			else {
+				fputs("invalid packet\n", stderr);
+				free(buffer);
+				return 0;
+			}
+		}
 	}
 
 	return 1;
