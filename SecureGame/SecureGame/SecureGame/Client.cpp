@@ -111,6 +111,7 @@ int Client::receive_packet(void* buffer, uint16_t packet_size) {
 		fputs("recv_all() error actual", stdout);
 		return 0;
 	}
+	return 1;
 }
 
 int Client::Pack(mv* playerMovement, void* buffer, size_t bufferSize) {
