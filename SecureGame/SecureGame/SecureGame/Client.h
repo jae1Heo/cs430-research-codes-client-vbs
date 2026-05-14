@@ -14,10 +14,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Bcrypt.lib")
 
-#define AES_KEY_SIZE 32
-#define AES_GCM_IV_SIZE 12
-#define AES_GCM_TAG_SIZE 16
-#define PACKET_MAX 256
+const size_t PACKET_MAX = 64;
 
 
 class Client {

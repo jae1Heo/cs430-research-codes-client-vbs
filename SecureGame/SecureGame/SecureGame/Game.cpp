@@ -7,6 +7,7 @@ Game::Game() {
     this->recv_buffer = (unsigned char*)malloc(PACKET_MAX);
     this->game_Status = 0;
     this->side = 0;
+    this->running = true;
 }
 
 Game::~Game() {
@@ -54,11 +55,121 @@ bool Game::Init(Client* client)
         return false;
     }
 
-    if (!client->initial_handshake(this->playerMove, &this->game_Status, &this->side)) {
-        MessageBoxA(nullptr, "Failed to complete handshake", "Error", MB_OK | MB_ICONERROR);
+    //int hs = client->initial_handshake(this->playerMove, &this->game_Status, &this->side);
+
+    /*
+    char msg[128];
+    memset(msg, 0, 128);
+    if (hs) {
+        sprintf(msg, "Failed to complete handshake : %d", hs);
+        MessageBoxA(nullptr, msg, "Error", MB_OK | MB_ICONERROR);
         return false;
     }
 
+    */
+
+    //unsigned char* buffer = (unsigned char*)malloc(PACKET_MAX);
+    //memset((void*)buffer, 0, PACKET_MAX);
+    EnclaveInput InputData;
+    memset(&InputData, 0, sizeof(EnclaveInput));
+
+    if (this->game_Status > 0) {
+		MessageBoxA(nullptr, "Handshake failed", "Error", MB_OK | MB_ICONERROR);
+        fputs("handshake failed\n", stderr);
+        //free(buffer);
+        return false;
+    }
+    while (this->game_Status != 2) {
+        if (this->game_Status == 0) {
+            playerMove->player_status = 'j';
+            playerMove->player_w = 0;
+            playerMove->player_s = 0;
+
+            if (!client->Pack(playerMove, (void*)InputData.buffer, sizeof(mv))) {
+				MessageBoxA(nullptr, "Error packing data", "Error", MB_OK | MB_ICONERROR);
+                //free(buffer);
+                return false;
+            }
+
+            InputData.isEncrypt = true;
+            InputData.cipherLen = 0;
+            PVOID returnValue = nullptr;
+            if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
+                char buffer[256];
+                sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
+                MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
+                this->running = false;
+            }
+
+            if (!client->send_packet(InputData.buffer, PACKET_MAX)) {
+                fputs("error sending packet\n", stderr);
+                //free(buffer);
+                return false;
+            }
+            //memset((void*)buffer, 0, PACKET_MAX);
+            memset(InputData.buffer, 0, PACKET_MAX);
+            this->game_Status = 1;
+        }
+        else if (this->game_Status == 1) {
+			int recv_len = client->receive_packet(InputData.buffer, PACKET_MAX);
+            if (!recv_len) {
+                fputs("error receiving packet\n", stderr);
+                //free(buffer);
+				return false;
+            }
+            InputData.isEncrypt = false;
+			InputData.cipherLen = recv_len;
+            //memcpy(InputData.buffer, buffer, sizeof(InputData.buffer));
+            // sending packet so encryption required
+            PVOID returnValue = nullptr;
+            if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
+                char buffer[256];
+                sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
+                MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
+                this->running = false;
+            }
+
+
+            if (InputData.buffer[0] == 's') {
+                this->side = (int)InputData.buffer[1];
+                playerMove->player_status = 'a';
+                playerMove->player_w = 0;
+                playerMove->player_s = 0;
+				memset(InputData.buffer, 0, PACKET_MAX);
+                if (!client->Pack(playerMove, InputData.buffer, sizeof(mv))) {
+                    fputs("error packing data\n", stderr);
+                    //free(buffer);
+                    return false;
+                }
+
+				InputData.isEncrypt = true;
+                InputData.cipherLen = 0;
+                PVOID returnValue = nullptr;
+                if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
+                    char buffer[256];
+                    sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
+                    MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
+                    this->running = false;
+                }
+
+
+                if (!client->send_packet(InputData.buffer, PACKET_MAX)) {
+                    fputs("error sending packet\n", stderr);
+                    //free(buffer);
+                    return false;
+                }
+                
+				memset(InputData.buffer, 0, PACKET_MAX);
+                this->game_Status = 2;
+            }
+            else {
+                fputs("invalid packet\n", stderr);
+                //free(buffer);
+                return false;
+            }
+		}
+    }
+    
     return true;
 }
 
@@ -82,59 +193,16 @@ void Game::Tick(Client* client)
 {
     const Uint8* keystates = SDL_GetKeyboardState(nullptr);
 
+
     if (this->game_Status != 2) {
         MessageBoxA(nullptr, "Invalid game option", "Error", MB_OK | MB_ICONERROR);
-        return;
+        this->running = false;
     }
-    else {
-        if (!client->receive_packet(recv_buffer, sizeof(gData))) {
-            MessageBoxA(nullptr, "Failed to receive data from the server", "Error", MB_OK | MB_ICONERROR);
-            return;
-        }
+    int cipher_len = client->receive_packet(recv_buffer, PACKET_MAX);
+    if (!cipher_len) {
+        MessageBoxA(nullptr, "Failed to receive data from the server", "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
     }
-
-    EnclaveInput InputData;
-    memcpy(InputData.buffer, recv_buffer, PACKET_MAX);
-
-    PVOID returnValue = nullptr;
-    if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
-        char buffer[256];
-        sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
-        MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    SDL_SetRenderDrawColor(m_Renderer, 255, 255, 255, 255);
-    const SDL_Rect leftPaddle =
-    {
-        static_cast<int>(InputData.state.left_paddle_x),
-        static_cast<int>(InputData.state.left_paddle_y),
-        static_cast<int>(PADDLE_WIDTH),
-        static_cast<int>(PADDLE_HEIGHT)
-    };
-    SDL_RenderFillRect(m_Renderer, &leftPaddle);
-
-    const SDL_Rect rightPaddle =
-    {
-        static_cast<int>(InputData.state.right_paddle_x),
-        static_cast<int>(InputData.state.right_paddle_y),
-        static_cast<int>(PADDLE_WIDTH),
-        static_cast<int>(PADDLE_HEIGHT)
-    };
-    SDL_RenderFillRect(m_Renderer, &rightPaddle);
-
-    const SDL_Rect ball =
-    {
-        static_cast<int>(InputData.state.ball_pos_x),
-        static_cast<int>(InputData.state.ball_pos_y),
-        static_cast<int>(BALL_SIZE),
-        static_cast<int>(BALL_SIZE)
-    };
-    SDL_RenderFillRect(m_Renderer, &ball);
-
-    char scoreText[32];
-    sprintf_s(scoreText, "%d - %d", InputData.state.left_score, InputData.state.right_score);
-    RenderText(scoreText, WINDOW_WIDTH / 2 - 40, 20);
 
     if (keystates[SDL_SCANCODE_W]) {
         playerMove->player_w = 1;
@@ -145,85 +213,90 @@ void Game::Tick(Client* client)
         playerMove->player_w = 0;
     }
 
-    this->playerMove->player_status = 'p';
+    EnclaveInput InputData;
+    memset(&InputData, 0, sizeof(EnclaveInput));
 
-    if (!client->Pack(this->playerMove, send_buffer, sizeof(mv))) {
-        MessageBoxA(nullptr, "Failed to pack the data", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
+    memcpy(InputData.buffer, recv_buffer, sizeof(InputData.buffer));
+    InputData.isEncrypt = true;
 
-    if (!client->send_packet((void*)send_buffer, sizeof(mv))) {
-        MessageBoxA(nullptr, "Failed to send the packet", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    memset(recv_buffer, 0, PACKET_MAX);
-    memset(send_buffer, 0, PACKET_MAX);
-
-    //data.KeyW = keystates[SDL_SCANCODE_W];
-    //data.KeyS = keystates[SDL_SCANCODE_S];
-
-    // not in use anymore
-    //data.KeyUp = keystates[SDL_SCANCODE_UP];
-    //data.KeyDown = keystates[SDL_SCANCODE_DOWN];
-
-    /*
     PVOID returnValue = nullptr;
-    if (!CallEnclave(Global::TickRoutine, &data, true, &returnValue))
-    {
+    InputData.cipherLen = cipher_len;
+    if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
         char buffer[256];
         sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
         MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
-        return;
+        this->running = false;
     }
+	memcpy(this->gameData, InputData.buffer, sizeof(gData));
 
     SDL_SetRenderDrawColor(m_Renderer, 255, 255, 255, 255);
-
     const SDL_Rect leftPaddle =
     {
-        static_cast<int>(data.LeftPaddle.X),
-        static_cast<int>(data.LeftPaddle.Y),
-        static_cast<int>(data.LeftPaddle.Width),
-        static_cast<int>(data.LeftPaddle.Height)
+        static_cast<int>(gameData->left_paddle_x),
+        static_cast<int>(gameData->left_paddle_y),
+        static_cast<int>(PADDLE_WIDTH),
+        static_cast<int>(PADDLE_HEIGHT)
     };
     SDL_RenderFillRect(m_Renderer, &leftPaddle);
 
     const SDL_Rect rightPaddle =
     {
-        static_cast<int>(data.RightPaddle.X),
-        static_cast<int>(data.RightPaddle.Y),
-        static_cast<int>(data.RightPaddle.Width),
-        static_cast<int>(data.RightPaddle.Height)
+        static_cast<int>(gameData->right_paddle_x),
+        static_cast<int>(gameData->right_paddle_y),
+        static_cast<int>(PADDLE_WIDTH),
+        static_cast<int>(PADDLE_HEIGHT)
     };
     SDL_RenderFillRect(m_Renderer, &rightPaddle);
 
     const SDL_Rect ball =
     {
-        static_cast<int>(data.Ball.X),
-        static_cast<int>(data.Ball.Y),
-        static_cast<int>(data.Ball.Width),
-        static_cast<int>(data.Ball.Height)
+        static_cast<int>(gameData->ball_pos_x),
+        static_cast<int>(gameData->ball_pos_y),
+        static_cast<int>(BALL_SIZE),
+        static_cast<int>(BALL_SIZE)
     };
     SDL_RenderFillRect(m_Renderer, &ball);
 
     char scoreText[32];
-    sprintf_s(scoreText, "%d - %d", data.LeftScore, data.RightScore);
-    RenderText(scoreText, WINDOW_WIDTH / 2 - 40, 20);
+    //sprintf_s(scoreText, "%d - %d", InputData.state.left_score, InputData.state.right_score);
+    //RenderText(scoreText, WINDOW_WIDTH / 2 - 40, 20);
 
-    */
+    this->playerMove->player_status = 'p';
 
+    if (!client->Pack(this->playerMove, send_buffer, sizeof(mv))) {
+        MessageBoxA(nullptr, "Failed to pack the data", "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+    }
 
+	InputData.isEncrypt = true;
+    returnValue = nullptr;
+    if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
+        char buffer[256];
+        sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
+        MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+    }
+
+    if (!client->send_packet(InputData.buffer, PACKET_MAX)) {
+        MessageBoxA(nullptr, "Failed to send the packet", "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+    }
+
+    memset(recv_buffer, 0, PACKET_MAX);
+    memset(send_buffer, 0, PACKET_MAX);
+    memset(this->playerMove, 0, sizeof(mv));
+    memset(this->gameData, 0, sizeof(gData));
+    memset(InputData.buffer, 0, PACKET_MAX);
 
 }
 
 void Game::Loop(Client* client)
 {
-    constexpr int FPS = 240;
+    constexpr int FPS = 120;
     constexpr int frameDelay = 1000 / FPS;
 
-    bool running = true;
 
-    while (running)
+    while (this->running)
     {
         const Uint32 frameStart = SDL_GetTicks();
 

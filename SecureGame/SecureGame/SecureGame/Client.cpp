@@ -96,13 +96,14 @@ int Client::send_packet(const void* buffer, uint16_t buffer_len) {
 
 int Client::receive_packet(void* buffer, uint16_t packet_size) {
 	uint16_t net_recv;
+
 	if (!recv_all(&net_recv, sizeof(net_recv))) {
 		fputs("recv_all() error size", stdout);
 		return 0;
 	}
 
 	uint16_t net_len = ntohs(net_recv);
-	if (net_len == 0 || net_len > packet_size) {
+	if (net_len > 256) {
 		fputs("packet size limit exceed", stdout);
 		return 0;
 	}
@@ -111,7 +112,8 @@ int Client::receive_packet(void* buffer, uint16_t packet_size) {
 		fputs("recv_all() error actual", stdout);
 		return 0;
 	}
-	return 1;
+
+	return net_len;
 }
 
 int Client::Pack(mv* playerMovement, void* buffer, size_t bufferSize) {
@@ -131,7 +133,7 @@ int Client::initial_handshake(mv* playerMovement, int* game_status, int* side) {
 	if (*game_status > 0) {
 		fputs("handshake failed\n", stderr);
 		free(buffer);
-		return 0;
+		return 1;
 	}
 
 	while (*game_status != 2) {
@@ -143,53 +145,53 @@ int Client::initial_handshake(mv* playerMovement, int* game_status, int* side) {
 			if (!Pack(playerMovement, (void*)buffer, sizeof(mv))) {
 				fputs("error packing data\n", stderr);
 				free(buffer);
-				return 0;
+				return 2;
 			}
 
 			if (!send_packet(buffer, sizeof(mv))) {
 				fputs("error sending packet\n", stderr);
 				free(buffer);
-				return 0;
+				return 3;
 			}
 
 			memset((void*)buffer, 0, PACKET_MAX);
 			*game_status = 1;
 		}
 		else if (*game_status == 1) {
-			if (!receive_packet(buffer, sizeof(mv))) {
+			if (!receive_packet(buffer, sizeof(gData))) {
 				fputs("error receiving packet\n", stderr);
 				free(buffer);
-				return 0;
+				return 4;
 			}
 
-			fputs("successfully joined the game\n", stdout);
 			if (buffer[0] == 's') {
 				*side = (int)buffer[1];
 				playerMovement->player_status = 'a';
 				playerMovement->player_w = 0;
 				playerMovement->player_s = 0;
-
+			
 				if(!Pack(playerMovement, buffer, sizeof(mv))) {
 					fputs("error packing data\n", stderr);
 					free(buffer);
-					return 0;
+					return 5;
 				}
 
 				if (!send_packet(buffer, sizeof(mv))) {
 					fputs("error sending packet\n", stderr);
 					free(buffer);
-					return 0;
+					return 6;
 				}
+				//Sleep(1);
 
 				*game_status = 2;
 			}
 			else {
 				fputs("invalid packet\n", stderr);
 				free(buffer);
-				return 0;
+				return 7;
 			}
 		}
 	}
 
-	return 1;
+	return 0;
 }
