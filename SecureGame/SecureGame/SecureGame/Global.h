@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENABLE_CONSOLE true
+#define ENABLE_CONSOLE false
 
 #include <Windows.h>
 #include <iostream>

@@ -169,7 +169,32 @@ bool Game::Init(Client* client)
             }
 		}
     }
-    
+    memset(InputData.buffer, 0, PACKET_MAX);
+
+    this->playerMove->player_status = 'p';
+    this->playerMove->player_w = 0;
+    this->playerMove->player_s = 0;
+
+    if (!client->Pack(this->playerMove, InputData.buffer, sizeof(mv))) {
+        MessageBoxA(nullptr, "Failed to pack the data", "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+    }
+
+    InputData.isEncrypt = true;
+    PVOID returnValue = nullptr;
+    if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
+        char buffer[256];
+        sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
+        MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+    }
+
+    if (!client->send_packet(InputData.buffer, PACKET_MAX)) {
+        MessageBoxA(nullptr, "Failed to send the packet", "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+    }
+
+    memset(this->send_buffer, 0, PACKET_MAX);
     return true;
 }
 
@@ -216,7 +241,7 @@ void Game::Tick(Client* client)
     EnclaveInput InputData;
     memset(&InputData, 0, sizeof(EnclaveInput));
 
-    memcpy(InputData.buffer, recv_buffer, sizeof(InputData.buffer));
+    memcpy(InputData.buffer, recv_buffer, PACKET_MAX);
     InputData.isEncrypt = true;
 
     PVOID returnValue = nullptr;
