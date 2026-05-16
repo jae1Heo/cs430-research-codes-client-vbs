@@ -169,6 +169,8 @@ bool Game::Init(Client* client)
             }
 		}
     }
+
+    /*
     memset(InputData.buffer, 0, PACKET_MAX);
 
     this->playerMove->player_status = 'p';
@@ -195,6 +197,7 @@ bool Game::Init(Client* client)
     }
 
     memset(this->send_buffer, 0, PACKET_MAX);
+    */
     return true;
 }
 
@@ -216,41 +219,77 @@ void Game::RenderText(const char* text, int x, int y)
 
 void Game::Tick(Client* client)
 {
-    const Uint8* keystates = SDL_GetKeyboardState(nullptr);
-
 
     if (this->game_Status != 2) {
         MessageBoxA(nullptr, "Invalid game option", "Error", MB_OK | MB_ICONERROR);
         this->running = false;
     }
-    int cipher_len = client->receive_packet(recv_buffer, PACKET_MAX);
-    if (!cipher_len) {
-        MessageBoxA(nullptr, "Failed to receive data from the server", "Error", MB_OK | MB_ICONERROR);
-        this->running = false;
-    }
+    const Uint8* keystates = SDL_GetKeyboardState(nullptr);
 
+    playerMove->player_status = 'p';
     if (keystates[SDL_SCANCODE_W]) {
         playerMove->player_w = 1;
         playerMove->player_s = 0;
     }
     else if (keystates[SDL_SCANCODE_S]) {
-        playerMove->player_s = 1;
+        playerMove->player_w = 1;
+        playerMove->player_s = 0;
+    }
+    else {
         playerMove->player_w = 0;
+        playerMove->player_s = 0;
     }
 
     EnclaveInput InputData;
     memset(&InputData, 0, sizeof(EnclaveInput));
 
-    memcpy(InputData.buffer, recv_buffer, PACKET_MAX);
-    InputData.isEncrypt = true;
+    if (!client->Pack(this->playerMove, this->send_buffer, sizeof(mv))) {
+		MessageBoxA(nullptr, "Failed to pack the data", "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+        return;
+    }
 
-    PVOID returnValue = nullptr;
+	memcpy(InputData.buffer, this->send_buffer, PACKET_MAX);
+	InputData.isEncrypt = true;
+	InputData.cipherLen = 0;
+
+	PVOID returnValue = nullptr;
+	if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
+		char buffer[256];
+		sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
+		MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
+		this->running = false;
+        return;
+	}
+
+	if (!client->send_packet(InputData.buffer, PACKET_MAX)) {
+		MessageBoxA(nullptr, "Failed to send the packet", "Error", MB_OK | MB_ICONERROR);
+		this->running = false;
+		return;
+	}
+    
+
+	memset(recv_buffer, 0, PACKET_MAX);
+
+    int cipher_len = client->receive_packet(recv_buffer, PACKET_MAX);
+    if (!cipher_len) {
+        MessageBoxA(nullptr, "Failed to receive data from the server", "Error", MB_OK | MB_ICONERROR);
+        this->running = false;
+        return;
+    }
+
+    memset(&InputData, 0, sizeof(EnclaveInput));
+    memcpy(InputData.buffer, recv_buffer, PACKET_MAX);
+    InputData.isEncrypt = false;
+
+    returnValue = nullptr;
     InputData.cipherLen = cipher_len;
     if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
         char buffer[256];
         sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
         MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
         this->running = false;
+        return;
     }
 	memcpy(this->gameData, InputData.buffer, sizeof(gData));
 
@@ -286,32 +325,12 @@ void Game::Tick(Client* client)
     //sprintf_s(scoreText, "%d - %d", InputData.state.left_score, InputData.state.right_score);
     //RenderText(scoreText, WINDOW_WIDTH / 2 - 40, 20);
 
-    this->playerMove->player_status = 'p';
-
-    if (!client->Pack(this->playerMove, send_buffer, sizeof(mv))) {
-        MessageBoxA(nullptr, "Failed to pack the data", "Error", MB_OK | MB_ICONERROR);
-        this->running = false;
-    }
-
-	InputData.isEncrypt = true;
-    returnValue = nullptr;
-    if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
-        char buffer[256];
-        sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
-        MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
-        this->running = false;
-    }
-
-    if (!client->send_packet(InputData.buffer, PACKET_MAX)) {
-        MessageBoxA(nullptr, "Failed to send the packet", "Error", MB_OK | MB_ICONERROR);
-        this->running = false;
-    }
+   
 
     memset(recv_buffer, 0, PACKET_MAX);
     memset(send_buffer, 0, PACKET_MAX);
     memset(this->playerMove, 0, sizeof(mv));
     memset(this->gameData, 0, sizeof(gData));
-    memset(InputData.buffer, 0, PACKET_MAX);
 
 }
 
