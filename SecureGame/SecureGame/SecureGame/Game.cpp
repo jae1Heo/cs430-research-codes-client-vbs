@@ -55,21 +55,6 @@ bool Game::Init(Client* client)
         return false;
     }
 
-    //int hs = client->initial_handshake(this->playerMove, &this->game_Status, &this->side);
-
-    /*
-    char msg[128];
-    memset(msg, 0, 128);
-    if (hs) {
-        sprintf(msg, "Failed to complete handshake : %d", hs);
-        MessageBoxA(nullptr, msg, "Error", MB_OK | MB_ICONERROR);
-        return false;
-    }
-
-    */
-
-    //unsigned char* buffer = (unsigned char*)malloc(PACKET_MAX);
-    //memset((void*)buffer, 0, PACKET_MAX);
     EnclaveInput InputData;
     memset(&InputData, 0, sizeof(EnclaveInput));
 
@@ -170,34 +155,6 @@ bool Game::Init(Client* client)
 		}
     }
 
-    /*
-    memset(InputData.buffer, 0, PACKET_MAX);
-
-    this->playerMove->player_status = 'p';
-    this->playerMove->player_w = 0;
-    this->playerMove->player_s = 0;
-
-    if (!client->Pack(this->playerMove, InputData.buffer, sizeof(mv))) {
-        MessageBoxA(nullptr, "Failed to pack the data", "Error", MB_OK | MB_ICONERROR);
-        this->running = false;
-    }
-
-    InputData.isEncrypt = true;
-    PVOID returnValue = nullptr;
-    if (!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
-        char buffer[256];
-        sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
-        MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
-        this->running = false;
-    }
-
-    if (!client->send_packet(InputData.buffer, PACKET_MAX)) {
-        MessageBoxA(nullptr, "Failed to send the packet", "Error", MB_OK | MB_ICONERROR);
-        this->running = false;
-    }
-
-    memset(this->send_buffer, 0, PACKET_MAX);
-    */
     return true;
 }
 
@@ -232,8 +189,8 @@ void Game::Tick(Client* client)
         playerMove->player_s = 0;
     }
     else if (keystates[SDL_SCANCODE_S]) {
-        playerMove->player_w = 1;
-        playerMove->player_s = 0;
+        playerMove->player_w = 0;
+        playerMove->player_s = 1;
     }
     else {
         playerMove->player_w = 0;
@@ -322,15 +279,15 @@ void Game::Tick(Client* client)
     SDL_RenderFillRect(m_Renderer, &ball);
 
     char scoreText[32];
-    //sprintf_s(scoreText, "%d - %d", InputData.state.left_score, InputData.state.right_score);
-    //RenderText(scoreText, WINDOW_WIDTH / 2 - 40, 20);
+    sprintf_s(scoreText, "%d - %d", gameData->left_score, gameData->right_score);
+    RenderText(scoreText, WINDOW_WIDTH / 2 - 40, 20);
 
    
 
     memset(recv_buffer, 0, PACKET_MAX);
     memset(send_buffer, 0, PACKET_MAX);
     memset(this->playerMove, 0, sizeof(mv));
-    memset(this->gameData, 0, sizeof(gData));
+    //memset(this->gameData, 0, sizeof(gData));
 
 }
 

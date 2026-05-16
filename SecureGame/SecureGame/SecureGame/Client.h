@@ -37,7 +37,6 @@ public:
     int send_packet(const void*, uint16_t);
     int receive_packet(void*, uint16_t);
     int connectToServer();
-    int initial_handshake(mv*, int*, int*);
     int Pack(mv*, void*, size_t);
 };
 

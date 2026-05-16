@@ -56,7 +56,7 @@ int Client::connectToServer() {
 int Client::send_all(const void* data, size_t size)
 {
 	size_t sent_total = 0;
-	const unsigned char* p = (const unsigned char*)data;
+	const unsigned char* p = (const unsigned char*)data; // (1) this is fine, because trying to read the data 
 
 	while (sent_total < size) {
 		int sent = send(this->sock, (const char*)p + sent_total, (int)(size - sent_total), 0);
@@ -69,7 +69,7 @@ int Client::send_all(const void* data, size_t size)
 int Client::recv_all(void* data, size_t size)
 {
 	size_t recv_total = 0;
-	const unsigned char* p = (const unsigned char*)data;
+	unsigned char* p = (unsigned char*)data; // (2) was trying to write to const unsigned char* which cus error
 
 	while (recv_total < size) {
 		int recved = recv(this->sock, (char*)p + recv_total, (int)(size - recv_total), 0);
@@ -103,7 +103,7 @@ int Client::receive_packet(void* buffer, uint16_t packet_size) {
 	}
 
 	uint16_t net_len = ntohs(net_recv);
-	if (net_len > 256) {
+	if (net_len > PACKET_MAX) { // was 256, since PACKET_MAX was defined as 256 but updaed to 64 after added encryption features
 		fputs("packet size limit exceed", stdout);
 		return 0;
 	}
@@ -124,74 +124,4 @@ int Client::Pack(mv* playerMovement, void* buffer, size_t bufferSize) {
 	memcpy(buffer, playerMovement, sizeof(mv));
 	return 1;
 
-}
-
-int Client::initial_handshake(mv* playerMovement, int* game_status, int* side) {
-	unsigned char* buffer = (unsigned char*)malloc(PACKET_MAX);
-	memset((void*)buffer, 0, PACKET_MAX);
-	
-	if (*game_status > 0) {
-		fputs("handshake failed\n", stderr);
-		free(buffer);
-		return 1;
-	}
-
-	while (*game_status != 2) {
-		if (*game_status == 0) {
-			playerMovement->player_status = 'j';
-			playerMovement->player_w = 0;
-			playerMovement->player_s = 0;
-
-			if (!Pack(playerMovement, (void*)buffer, sizeof(mv))) {
-				fputs("error packing data\n", stderr);
-				free(buffer);
-				return 2;
-			}
-
-			if (!send_packet(buffer, sizeof(mv))) {
-				fputs("error sending packet\n", stderr);
-				free(buffer);
-				return 3;
-			}
-
-			memset((void*)buffer, 0, PACKET_MAX);
-			*game_status = 1;
-		}
-		else if (*game_status == 1) {
-			if (!receive_packet(buffer, sizeof(gData))) {
-				fputs("error receiving packet\n", stderr);
-				free(buffer);
-				return 4;
-			}
-
-			if (buffer[0] == 's') {
-				*side = (int)buffer[1];
-				playerMovement->player_status = 'a';
-				playerMovement->player_w = 0;
-				playerMovement->player_s = 0;
-			
-				if(!Pack(playerMovement, buffer, sizeof(mv))) {
-					fputs("error packing data\n", stderr);
-					free(buffer);
-					return 5;
-				}
-
-				if (!send_packet(buffer, sizeof(mv))) {
-					fputs("error sending packet\n", stderr);
-					free(buffer);
-					return 6;
-				}
-				//Sleep(1);
-
-				*game_status = 2;
-			}
-			else {
-				fputs("invalid packet\n", stderr);
-				free(buffer);
-				return 7;
-			}
-		}
-	}
-
-	return 0;
 }
