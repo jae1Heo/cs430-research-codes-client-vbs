@@ -287,7 +287,7 @@ void Game::Tick(Client* client)
     memset(recv_buffer, 0, PACKET_MAX);
     memset(send_buffer, 0, PACKET_MAX);
     memset(this->playerMove, 0, sizeof(mv));
-    //memset(this->gameData, 0, sizeof(gData));
+    memset(this->gameData, 0, sizeof(gData));
 
 }
 

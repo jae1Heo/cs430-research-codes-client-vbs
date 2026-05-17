@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "Shared.h"
-//#include "Game.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Bcrypt.lib")
