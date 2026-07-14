@@ -67,3 +67,5 @@ Run the following command:
 ```powershell
 & .\signtool.exe sign /fd SHA256 /ph /a /n "MyTestEnclaveCert" <location_to_your_dll>
 ```
+
+Server Code: https://github.com/jae1Heo/cs430-research-codes-server
