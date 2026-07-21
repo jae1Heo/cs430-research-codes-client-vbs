@@ -75,8 +75,8 @@
     <LibraryPath>C:\Users\jh\Documents\SDL2-devel-2.30.7-VC\SDL2-2.30.7\lib\x64;C:\Users\jh\Documents\SDL2_ttf-devel-2.24.0-VC\SDL2_ttf-2.24.0\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ExternalIncludePath>C:\Users\jh\Documents\SDL2_ttf-devel-2.24.0-VC\SDL2_ttf-2.24.0\include;C:\Users\jh\Documents\SDL2-devel-2.30.7-VC\SDL2-2.30.7\include;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\jh\Documents\SDL2-devel-2.30.7-VC\SDL2-2.30.7\lib\x64;C:\Users\jh\Documents\SDL2_ttf-devel-2.24.0-VC\SDL2_ttf-2.24.0\lib\x64;$(LibraryPath)</LibraryPath>
+    <ExternalIncludePath>C:\Users\jh\Documents\SDL2_ttf-devel-2.24.0-VC\SDL2_ttf-2.24.0\include;C:\Users\jh\Documents\SDL2-devel-2.30.11-VC\SDL2-2.30.11\include;$(ExternalIncludePath)</ExternalIncludePath>
+    <LibraryPath>C:\Users\jh\Documents\SDL2-devel-2.30.11-VC\SDL2-2.30.11\lib\x64;C:\Users\jh\Documents\SDL2_ttf-devel-2.24.0-VC\SDL2_ttf-2.24.0\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
@@ -115,7 +115,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
