@@ -40,7 +40,7 @@ typedef struct gameData {
     float right_paddle_x;
 }gData;
 
-typedef struct {
+typedef struct envelope {
     unsigned char symkey[RSA_SIGNED_SIZE];
     unsigned char iv[IV_SIZE];
     unsigned char packet[PACKET_MAX];
@@ -48,10 +48,25 @@ typedef struct {
     unsigned char hash_signed[RSA_SIGNED_SIZE];
 }envelope;
 
+typedef struct RenderRect {
+    int x; // x coord
+    int y; // y coord
+    int w; // width
+    int h; // height
+} RenderRect;
+
+typedef struct EnclaveOutput {
+    RenderRect rects[3]; // 0 -> left paddle, 1 -> right paddle, 2 -> ball
+    uint16_t left_score;
+    uint16_t right_score;
+    bool valid;
+}EnclaveOutput;
+
 typedef struct EnclaveInput {
-    char buffer[64];
+    char buffer[sizeof(envelope)];
     int cipherLen;
     bool isEncrypt;
 }EnclaveInput;
+
 #pragma pack(pop)
 
