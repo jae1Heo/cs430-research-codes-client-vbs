@@ -74,7 +74,7 @@ BCRYPT_KEY_HANDLE Encryption::loadPublicKey(const char* key_pem) {
 		return NULL;
 	}
 
-	if (BCryptImportKeyPair(hAlg, NULL, BCRYPT_RSAPUBLIC_BLOB, &hKey, blobBuffer.data(), blobLen, 0) != 0) {
+	if (BCryptImportKeyPair(hAlg, NULL, LEGACY_RSAPUBLIC_BLOB, &hKey, blobBuffer.data(), blobLen, 0) != 0) {
 		BCryptCloseAlgorithmProvider(hAlg, 0);
 		return NULL;
 	}
