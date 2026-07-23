@@ -21,12 +21,12 @@ BCRYPT_KEY_HANDLE Encryption::loadPrivateKey(const char* key_pem) {
 	}
 
 	DWORD pkcs8Len = 0;
-    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, derBuffer.data(), dLen, 0, NULL, NULL, &pkcs8Len)) {
+    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, buffer.data(), dLen, 0, NULL, NULL, &pkcs8Len)) {
         return NULL;
     }
 
     std::vector<BYTE> pkcs8Buffer(pkcs8Len);
-    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, derBuffer.data(), dLen, 0, NULL, pkcs8Buffer.data(), &pkcs8Len)) {
+    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, buffer.data(), dLen, 0, NULL, pkcs8Buffer.data(), &pkcs8Len)) {
         return NULL;
     }
 
@@ -71,7 +71,7 @@ BCRYPT_KEY_HANDLE Encryption::loadPublicKey(const char* key_pem) {
 
 	DWORD blobLen = 0;
 	// try to decode PKCS#8 header from OpenSSL
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer.data(), dLen, CRYPT_DECODE_ALLOC_FLAG, NULL, NULL, &blobLen)) { // allows this function to allocate memory for the decoded structure
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer.data(), dLen, 0, NULL, NULL, &blobLen)) {
 		return NULL;
 	}
 	/*
