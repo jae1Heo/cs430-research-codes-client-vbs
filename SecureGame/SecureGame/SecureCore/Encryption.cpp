@@ -115,7 +115,7 @@ int Encryption::AES_encrypt(unsigned char* plaintext, int plaintext_len, const u
 	BCryptDestroyKey(hKey);
 	BCryptCloseAlgorithmProvider(hAlg, 0);
 
-	return (status == 0) ? (int)plaintext_len : -1;
+	return (status == 0) ? (int)cipherLen : -1;
 
 }
 
