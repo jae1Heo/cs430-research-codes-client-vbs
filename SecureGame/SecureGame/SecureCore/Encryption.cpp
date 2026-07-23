@@ -20,15 +20,27 @@ BCRYPT_KEY_HANDLE Encryption::loadPrivateKey(const char* key_pem) {
 		return NULL;
 	}
 
+	DWORD pkcs8Len = 0;
+    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, derBuffer.data(), dLen, 0, NULL, NULL, &pkcs8Len)) {
+        return NULL;
+    }
+
+    std::vector<BYTE> pkcs8Buffer(pkcs8Len);
+    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, derBuffer.data(), dLen, 0, NULL, pkcs8Buffer.data(), &pkcs8Len)) {
+        return NULL;
+    }
+
+	PCRYPT_PRIVATE_KEY_INFO privateKeyInfo = reinterpret_cast<PCRYPT_PRIVATE_KEY_INFO>(pkcs8Buffer.data());
+
 	DWORD blobLen = 0;
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, buffer.data(), dLen, 0, NULL, NULL, &blobLen)) {
-		return NULL;
-	}
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, privateKeyInfo->PrivateKey.pbData, privateKeyInfo->PrivateKey.cbData, 0, NULL, NULL, &blobLen)) {
+        return NULL;
+    }
 
 	std::vector<BYTE> blobBuffer(blobLen);
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, buffer.data(), dLen, 0, NULL, blobBuffer.data(), &blobLen)) {
-		return NULL;
-	}
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, privateKeyInfo->PrivateKey.pbData, privateKeyInfo->PrivateKey.cbData, 0, NULL, blobBuffer.data(), &blobLen)) {
+        return NULL;
+    }
 
 	BCRYPT_ALG_HANDLE hAlg = NULL;
 	BCRYPT_KEY_HANDLE hKey = NULL;
@@ -58,14 +70,26 @@ BCRYPT_KEY_HANDLE Encryption::loadPublicKey(const char* key_pem) {
 	}
 
 	DWORD blobLen = 0;
+	// try to decode PKCS#8 header from OpenSSL
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer.data(), dLen, CRYPT_DECODE_ALLOC_FLAG, NULL, NULL, &blobLen)) { // allows this function to allocate memory for the decoded structure
+		return NULL;
+	}
+	/*
 	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, RSA_CSP_PUBLICKEYBLOB, buffer.data(), dLen, 0, NULL, NULL, &blobLen)) {
 		return NULL;
 	}
+	*/
 
-	std::vector<BYTE> blobBuffer(blobLen);
+	std::vector<BYTE> blobBuffer(blobLen);	
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer.data(), dLen, 0, NULL, blobBuffer.data(), &blobLen)) {
+		return NULL;
+	}
+	
+	/*
 	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, RSA_CSP_PUBLICKEYBLOB, buffer.data(), dLen, 0, NULL, blobBuffer.data(), &blobLen)) {
 		return NULL;
 	}
+	*/
 
 	BCRYPT_ALG_HANDLE hAlg = NULL;
 	BCRYPT_KEY_HANDLE hKey = NULL;
