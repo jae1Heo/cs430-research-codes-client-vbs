@@ -37,8 +37,11 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
             return nullptr;
         }
 
-        memset(input->buffer, 0, sizeof(64));
+        memset(input->buffer, 0, 64);
         memcpy(input->buffer, plaintext, plaintext_len);
+
+		SecureZeroMemory(plaintext, sizeof(char)* 64);
+		SecureZeroMemory(ciphertext, sizeof(char) *64);
     }
 
     return nullptr;
