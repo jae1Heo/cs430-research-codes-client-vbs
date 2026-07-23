@@ -69,7 +69,7 @@ bool Game::Init(Client* client)
 			InputData.isEncrypt = true;
 
 			PVOID returnValue = nullptr;
-			if(!CallEnclave(Global::TickRoutine, &inputData, true, &returnValue)) {
+			if(!CallEnclave(Global::TickRoutine, &InputData, true, &returnValue)) {
 				char buffer[256];
                 sprintf_s(buffer, "Failed to call enclave routine: %d", GetLastError());
                 MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
@@ -121,7 +121,7 @@ bool Game::Init(Client* client)
 					return false;
 				}
 
-				if(!client->send_packet((unsigned char*)InputData.buffer, sizeof(envelope)) {
+				if(!client->send_packet((unsigned char*)InputData.buffer, sizeof(envelope))) {
 					this->running = false;
 					return false;
 				}
