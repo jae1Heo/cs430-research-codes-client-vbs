@@ -1,8 +1,9 @@
 #include "Global.h"
 
 
-BCRYPT_KEY_HANDLE enclavePrivateKey = NULL;
-BCRYPT_KEY_HANDLE serverPublicKey = NULL;
+static BCRYPT_KEY_HANDLE enclavePrivateKey = NULL;
+static BCRYPT_KEY_HANDLE serverPublicKey = NULL;
+static bool isKeyLoaded = false;
 
 extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
 {
@@ -10,9 +11,14 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
     if (!context) {
         return nullptr;
     }
+	
     EnclaveInput*input  = static_cast<EnclaveInput*>(context);
     Encryption enc = Encryption();
 
+	if(!isKeyLoaded) {
+		enclavePrivateKey = enc.loadPrivateKey(/*private pem string -- will be added later*/);
+		serverPublicKey = enc.loadPublicKey(/*public pem string -- will be added later*/);
+	}
 
     if(input->isEncrypt) {
 		mv playerMovement;
