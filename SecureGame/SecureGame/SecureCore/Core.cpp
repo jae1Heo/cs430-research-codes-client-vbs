@@ -21,7 +21,7 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
 		envelope outEnvelope;
 		SecureZeroMemory(&outEnvelope, sizeof(envelope));
 
-		bool success = enc.buildEnvelope(reinterpret_cast<unsigned char*>(&playerMovement), sizeof(mv), envlavePrivateKey, serverPublicKey, &outEnvelope);
+		bool success = enc.buildEnvelope(reinterpret_cast<unsigned char*>(&playerMovement), sizeof(mv), enclavePrivate, serverPublicKey, &outEnvelope);
 
 		SecureZeroMemory(&playerMovement, sizeof(mv));
 		SecureZeroMemory(input->buffer, sizeof(envelope));
@@ -86,7 +86,7 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
 		output.valid = true;
 
 		SecureZeroMemory(decrypted, PACKET_MAX);
-		memcpy(input->buffer, &output, sizeof(EnvlaveOutput));
+		memcpy(input->buffer, &output, sizeof(EnclaveOutput));
 		
 		/*
         unsigned char plaintext[64];
