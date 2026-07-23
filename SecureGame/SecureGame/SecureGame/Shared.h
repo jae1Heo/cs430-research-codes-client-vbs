@@ -64,7 +64,6 @@ typedef struct EnclaveOutput {
 
 typedef struct EnclaveInput {
     char buffer[sizeof(envelope)];
-    int cipherLen;
     bool isEncrypt;
 }EnclaveInput;
 
