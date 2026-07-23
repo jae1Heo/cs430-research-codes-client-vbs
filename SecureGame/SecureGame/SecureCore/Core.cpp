@@ -31,7 +31,6 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
 		}
 
 		memcpy(input->buffer, &outEnvelope, sizeof(envelope));
-		input->cipherLen = sizeof(envelope);
 		input->isEncrypt = false;
 		/*
         unsigned char ciphertext[64];
