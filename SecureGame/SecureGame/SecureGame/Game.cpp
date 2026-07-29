@@ -58,7 +58,7 @@ bool Game::Init(Client* client)
     EnclaveInput InputData;
     SecureZeroMemory(&InputData, sizeof(EnclaveInput));
 
-	while(this->game_Statue != 2) {
+	while(this->game_Status != 2) {
 		if(this->game_Status == 0) {
 			mv join = {0};
 			join.player_status = 'j';
@@ -362,7 +362,7 @@ void Game::Tick(Client* client)
     };
 	*/
 	
-    SDL_RenderFillRect(m_Renderer, (const SDL_Rect*)&renderData.rects[0);
+    SDL_RenderFillRect(m_Renderer, (const SDL_Rect*)&renderData.rects[0]);
 	/*
     const SDL_Rect rightPaddle =
     {

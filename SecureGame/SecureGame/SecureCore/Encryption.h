@@ -5,9 +5,11 @@
 #include <Windows.h>
 #include <bcrypt.h>
 #include <wincrypt.h>
-#include <cstdint>
-#include <vector>
-#include <iostream>
+#include <stdio.h>
+#include <stdint.h>
+
+#include "../SecureGame/Shared.h"
+
 
 #pragma comment(lib, "Bcrypt.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -22,8 +24,9 @@ extern const char* test_iv;
 #define IV_SIZE 16
 #define HASH_SIZE_BEFORE_SIGN 32
 
+/*
 #pragma pack(push, 1)
-typedef struct {
+typedef struct envelope {
     unsigned char symkey[RSA_SIGNED_SIZE];
     unsigned char iv[IV_SIZE];
     unsigned char packet[PACKET_MAX];
@@ -31,6 +34,8 @@ typedef struct {
     unsigned char hash_signed[RSA_SIGNED_SIZE];
 }envelope;
 #pragma pack(pop)
+*/
+
 
 class Encryption {
 private:

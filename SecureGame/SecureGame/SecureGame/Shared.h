@@ -40,7 +40,7 @@ typedef struct gameData {
     float right_paddle_x;
 }gData;
 
-typedef struct envelope {
+typedef struct envelope{
     unsigned char symkey[RSA_SIGNED_SIZE];
     unsigned char iv[IV_SIZE];
     unsigned char packet[PACKET_MAX];

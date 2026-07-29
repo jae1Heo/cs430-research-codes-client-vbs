@@ -13,7 +13,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Bcrypt.lib")
 
-const size_t PACKET_MAX = 64;
+#define PACKET_MAX 64
 
 
 class Client {

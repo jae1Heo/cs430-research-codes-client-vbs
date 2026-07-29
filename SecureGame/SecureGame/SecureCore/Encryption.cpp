@@ -1,5 +1,6 @@
-
 #include "Encryption.h"
+
+const char* test_key = "abcdefghijklmnopqrstuvwxyzzyxwvu";
 
 Encryption::Encryption() {
 
@@ -15,32 +16,27 @@ BCRYPT_KEY_HANDLE Encryption::loadPrivateKey(const char* key_pem) {
 		return NULL;
 	}
 
-	std::vector<BYTE> buffer(dLen);
-	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, buffer.data(), &dLen, NULL, NULL)) {
+	// Use a fixed stack buffer if small, or a static/safe allocation size (e.g., 4KB max for PEM)
+	if (dLen > 4096) return NULL;
+	BYTE buffer[4096];
+
+	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, buffer, &dLen, NULL, NULL)) {
 		return NULL;
 	}
 
-	DWORD pkcs8Len = 0;
-    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, buffer.data(), dLen, 0, NULL, NULL, &pkcs8Len)) {
-        return NULL;
-    }
+	DWORD pkcs8Len = 4096;
+	BYTE pkcs8Buffer[4096];
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, buffer, dLen, 0, NULL, pkcs8Buffer, &pkcs8Len)) {
+		return NULL;
+	}
 
-    std::vector<BYTE> pkcs8Buffer(pkcs8Len);
-    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, buffer.data(), dLen, 0, NULL, pkcs8Buffer.data(), &pkcs8Len)) {
-        return NULL;
-    }
+	PCRYPT_PRIVATE_KEY_INFO privateKeyInfo = reinterpret_cast<PCRYPT_PRIVATE_KEY_INFO>(pkcs8Buffer);
 
-	PCRYPT_PRIVATE_KEY_INFO privateKeyInfo = reinterpret_cast<PCRYPT_PRIVATE_KEY_INFO>(pkcs8Buffer.data());
-
-	DWORD blobLen = 0;
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, privateKeyInfo->PrivateKey.pbData, privateKeyInfo->PrivateKey.cbData, 0, NULL, NULL, &blobLen)) {
-        return NULL;
-    }
-
-	std::vector<BYTE> blobBuffer(blobLen);
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, privateKeyInfo->PrivateKey.pbData, privateKeyInfo->PrivateKey.cbData, 0, NULL, blobBuffer.data(), &blobLen)) {
-        return NULL;
-    }
+	DWORD blobLen = 4096;
+	BYTE blobBuffer[4096];
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, privateKeyInfo->PrivateKey.pbData, privateKeyInfo->PrivateKey.cbData, 0, NULL, blobBuffer, &blobLen)) {
+		return NULL;
+	}
 
 	BCRYPT_ALG_HANDLE hAlg = NULL;
 	BCRYPT_KEY_HANDLE hKey = NULL;
@@ -49,7 +45,7 @@ BCRYPT_KEY_HANDLE Encryption::loadPrivateKey(const char* key_pem) {
 		return NULL;
 	}
 
-	if (BCryptImportKeyPair(hAlg, NULL, LEGACY_RSAPRIVATE_BLOB, &hKey, blobBuffer.data(), blobLen, 0) != 0) {
+	if (BCryptImportKeyPair(hAlg, NULL, LEGACY_RSAPRIVATE_BLOB, &hKey, blobBuffer, blobLen, 0) != 0) {
 		BCryptCloseAlgorithmProvider(hAlg, 0);
 		return NULL;
 	}
@@ -64,32 +60,17 @@ BCRYPT_KEY_HANDLE Encryption::loadPublicKey(const char* key_pem) {
 		return NULL;
 	}
 
-	std::vector<BYTE> buffer(dLen);
-	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, buffer.data(), &dLen, NULL, NULL)) {
+	if (dLen > 4096) return NULL;
+	BYTE buffer[4096];
+	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, buffer, &dLen, NULL, NULL)) {
 		return NULL;
 	}
 
-	DWORD blobLen = 0;
-	// try to decode PKCS#8 header from OpenSSL
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer.data(), dLen, 0, NULL, NULL, &blobLen)) {
+	DWORD blobLen = 4096;
+	BYTE blobBuffer[4096];
+	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer, dLen, 0, NULL, blobBuffer, &blobLen)) {
 		return NULL;
 	}
-	/*
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, RSA_CSP_PUBLICKEYBLOB, buffer.data(), dLen, 0, NULL, NULL, &blobLen)) {
-		return NULL;
-	}
-	*/
-
-	std::vector<BYTE> blobBuffer(blobLen);	
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer.data(), dLen, 0, NULL, blobBuffer.data(), &blobLen)) {
-		return NULL;
-	}
-	
-	/*
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, RSA_CSP_PUBLICKEYBLOB, buffer.data(), dLen, 0, NULL, blobBuffer.data(), &blobLen)) {
-		return NULL;
-	}
-	*/
 
 	BCRYPT_ALG_HANDLE hAlg = NULL;
 	BCRYPT_KEY_HANDLE hKey = NULL;
@@ -98,7 +79,7 @@ BCRYPT_KEY_HANDLE Encryption::loadPublicKey(const char* key_pem) {
 		return NULL;
 	}
 
-	if (BCryptImportKeyPair(hAlg, NULL, LEGACY_RSAPUBLIC_BLOB, &hKey, blobBuffer.data(), blobLen, 0) != 0) {
+	if (BCryptImportKeyPair(hAlg, NULL, LEGACY_RSAPUBLIC_BLOB, &hKey, blobBuffer, blobLen, 0) != 0) {
 		BCryptCloseAlgorithmProvider(hAlg, 0);
 		return NULL;
 	}
