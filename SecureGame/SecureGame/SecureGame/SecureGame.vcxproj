@@ -75,8 +75,8 @@
     <LibraryPath>C:\Users\jh\Documents\SDL2-devel-2.30.7-VC\SDL2-2.30.7\lib\x64;C:\Users\jh\Documents\SDL2_ttf-devel-2.24.0-VC\SDL2_ttf-2.24.0\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ExternalIncludePath>C:\Users\juble\sdl2\SDL2_ttf-2.24.0\include;C:\Users\juble\sdl2\SDL2-2.32.8\include;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\juble\sdl2\SDL2-2.32.8\lib\x64;C:\Users\juble\sdl2\SDL2_ttf-2.24.0\lib\x64;$(LibraryPath)</LibraryPath>
+    <ExternalIncludePath>C:\Users\jh\sdl2\SDL2_ttf-2.24.0\include;C:\Users\jh\sdl2\SDL2-2.32.10\include;$(ExternalIncludePath)</ExternalIncludePath>
+    <LibraryPath>C:\Users\jh\sdl2\SDL2-2.32.10\lib\x64;C:\Users\jh\sdl2\SDL2_ttf-2.24.0\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnableManifest>true</VcpkgEnableManifest>

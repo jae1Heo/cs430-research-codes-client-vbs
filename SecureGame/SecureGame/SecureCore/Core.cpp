@@ -60,8 +60,8 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
     Encryption enc = Encryption();
 
 	if(!isKeyLoaded) {
-		enclavePrivateKey = enc.loadPrivateKey(enclave_private_key_str);
-		serverPublicKey = enc.loadPublicKey(server_pub_key_str);
+		enc.loadPrivateKey(enclave_private_key_str, &enclavePrivateKey);
+		enc.loadPublicKey(server_pub_key_str, &serverPublicKey);
 		isKeyLoaded = true;
 	}
 

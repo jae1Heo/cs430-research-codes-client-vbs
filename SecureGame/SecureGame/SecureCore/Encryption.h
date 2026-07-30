@@ -4,7 +4,6 @@
 
 #include <Windows.h>
 #include <bcrypt.h>
-#include <wincrypt.h>
 #include <stdio.h>
 #include <stdint.h>
 
@@ -12,7 +11,6 @@
 
 
 #pragma comment(lib, "Bcrypt.lib")
-#pragma comment(lib, "crypt32.lib")
 #pragma warning(disable:4996)
 
 extern const char* test_key;
@@ -24,17 +22,24 @@ extern const char* test_iv;
 #define IV_SIZE 16
 #define HASH_SIZE_BEFORE_SIGN 32
 
-/*
-#pragma pack(push, 1)
-typedef struct envelope {
-    unsigned char symkey[RSA_SIGNED_SIZE];
-    unsigned char iv[IV_SIZE];
-    unsigned char packet[PACKET_MAX];
-    uint16_t packet_len;
-    unsigned char hash_signed[RSA_SIGNED_SIZE];
-}envelope;
-#pragma pack(pop)
-*/
+struct RSA_PRIVATE_PARAMS {
+    BYTE* mod_p;
+    ULONG mod_bytes;
+    BYTE* exp_p;
+    ULONG exp_bytes;
+    BYTE* priv_exp_p;
+    ULONG priv_exp_bytes;
+    BYTE* p;
+    ULONG p_bytes;
+    BYTE* q;
+    ULONG q_bytes;
+    BYTE* dp;
+    ULONG dp_bytes;
+    BYTE* dq;
+    ULONG dq_bytes;
+    BYTE* inv;
+    ULONG inv_bytes;
+};
 
 
 class Encryption {
@@ -44,8 +49,15 @@ private:
     ~Encryption();
 
     // key loader
-    BCRYPT_KEY_HANDLE loadPrivateKey(const char*);
-    BCRYPT_KEY_HANDLE loadPublicKey(const char*);
+    bool loadPrivateKey(const char*, BCRYPT_KEY_HANDLE*);
+    bool loadPublicKey(const char*, BCRYPT_KEY_HANDLE*);
+
+    // load key helper functions
+    bool extractRsaParamsFromDerPublic(const BYTE*, size_t, BYTE**, ULONG*, BYTE**, ULONG*);
+    bool ExtractRsaParamsFromDerPrivate(const BYTE*, size_t, RSA_PRIVATE_PARAMS*);
+
+    // base64 decode
+    size_t base64Decode(const char*, size_t, BYTE*);
 
     // aes functions
     bool generateIv(unsigned char*);

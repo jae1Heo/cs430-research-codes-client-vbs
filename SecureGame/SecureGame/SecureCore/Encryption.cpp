@@ -9,84 +9,414 @@ Encryption::~Encryption() {
 
 }
 
+
 // key loader
-BCRYPT_KEY_HANDLE Encryption::loadPrivateKey(const char* key_pem) {
-	DWORD dLen = 0;
-	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, NULL, &dLen, NULL, NULL)) {
-		return NULL;
-	}
-
-	// Use a fixed stack buffer if small, or a static/safe allocation size (e.g., 4KB max for PEM)
-	if (dLen > 4096) return NULL;
-	BYTE buffer[4096];
-
-	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, buffer, &dLen, NULL, NULL)) {
-		return NULL;
-	}
-
-	DWORD pkcs8Len = 4096;
-	BYTE pkcs8Buffer[4096];
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_PRIVATE_KEY_INFO, buffer, dLen, 0, NULL, pkcs8Buffer, &pkcs8Len)) {
-		return NULL;
-	}
-
-	PCRYPT_PRIVATE_KEY_INFO privateKeyInfo = reinterpret_cast<PCRYPT_PRIVATE_KEY_INFO>(pkcs8Buffer);
-
-	DWORD blobLen = 4096;
-	BYTE blobBuffer[4096];
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY, privateKeyInfo->PrivateKey.pbData, privateKeyInfo->PrivateKey.cbData, 0, NULL, blobBuffer, &blobLen)) {
-		return NULL;
-	}
-
+bool Encryption::loadPrivateKey(const char* key_pem, BCRYPT_KEY_HANDLE* key) {
+	NTSTATUS status;
 	BCRYPT_ALG_HANDLE hAlg = NULL;
-	BCRYPT_KEY_HANDLE hKey = NULL;
 
-	if (BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RSA_ALGORITHM, NULL, 0) != 0) {
-		return NULL;
+	size_t pemLen = strlen(key_pem);
+	HANDLE heap = GetProcessHeap();
+
+	char* b64Clean = (char*)HeapAlloc(heap, HEAP_ZERO_MEMORY, pemLen + 1);
+	if (!b64Clean) {
+		return false;
 	}
 
-	if (BCryptImportKeyPair(hAlg, NULL, LEGACY_RSAPRIVATE_BLOB, &hKey, blobBuffer, blobLen, 0) != 0) {
-		BCryptCloseAlgorithmProvider(hAlg, 0);
-		return NULL;
+	size_t cleanIndex = 0;
+	for (size_t i = 0; i < pemLen; i++) {
+		// ignore header/footer 
+		if (key_pem[i] == '-') {
+			while (i < pemLen && key_pem[i] != '\n') {
+				i++;
+			}
+			continue;
+		}
+		char c = key_pem[i];
+		// takes only base64 encoded daa
+		if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+			b64Clean[cleanIndex++] = c;
+		}
 	}
 
+	BYTE* derbytes = (BYTE*)HeapAlloc(heap, HEAP_ZERO_MEMORY, cleanIndex);
+	if (!derbytes) {
+		HeapFree(heap, 0, b64Clean);
+		return false;
+	}
+
+	size_t derLen = this->base64Decode(b64Clean, cleanIndex, derbytes);
+	HeapFree(heap, 0, b64Clean);
+
+	if (derLen == 0) {
+		HeapFree(heap, 0, derbytes);
+		return false;
+	}
+
+	RSA_PRIVATE_PARAMS params = { 0 };
+	if (!ExtractRsaParamsFromDerPrivate(derbytes, derLen, &params)) {
+		HeapFree(heap, 0, derbytes);
+		return false;
+	}
+
+	// blob length: header + e + n + p + q
+	ULONG blobLen = sizeof(BCRYPT_RSAKEY_BLOB) + params.exp_bytes + params.mod_bytes + params.p_bytes + params.dq_bytes;
+	BCRYPT_RSAKEY_BLOB* header = (BCRYPT_RSAKEY_BLOB*)HeapAlloc(heap, HEAP_ZERO_MEMORY, blobLen);
+
+	header->Magic = BCRYPT_RSAPRIVATE_MAGIC;
+	header->BitLength = params.mod_bytes * 8;
+	header->cbPublicExp = params.exp_bytes;
+	header->cbModulus = params.mod_bytes;
+	header->cbPrime1 = params.p_bytes;
+	header->cbPrime2 = params.q_bytes;
+
+	BYTE* offset = ((BYTE*)header) + sizeof(BCRYPT_RSAKEY_BLOB);
+	memcpy(offset, params.exp_p, params.exp_bytes);
+	offset += params.exp_bytes;
+	memcpy(offset, params.mod_p, params.mod_bytes);
+	offset += params.mod_bytes;
+	memcpy(offset, params.p, params.p_bytes);
+	offset += params.p_bytes;
+	memcpy(offset, params.q, params.q_bytes);
+
+	HeapFree(heap, 0, derbytes);
+
+	status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RSA_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
+
+	if (status) {
+		HeapFree(heap, 0, header);
+		return false;
+	}
+
+	BCryptImportKeyPair(hAlg, NULL, BCRYPT_RSAPRIVATE_BLOB, key, (PUCHAR)header, blobLen, 0);
+	HeapFree(heap, 0, header);
 	BCryptCloseAlgorithmProvider(hAlg, 0);
-	return hKey;
+	return true;
 }
 
-BCRYPT_KEY_HANDLE Encryption::loadPublicKey(const char* key_pem) {
-	DWORD dLen = 0;
-	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, NULL, &dLen, NULL, NULL)) {
-		return NULL;
-	}
-
-	if (dLen > 4096) return NULL;
-	BYTE buffer[4096];
-	if (!CryptStringToBinaryA(key_pem, 0, CRYPT_STRING_BASE64HEADER, buffer, &dLen, NULL, NULL)) {
-		return NULL;
-	}
-
-	DWORD blobLen = 4096;
-	BYTE blobBuffer[4096];
-	if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO, buffer, dLen, 0, NULL, blobBuffer, &blobLen)) {
-		return NULL;
-	}
-
+bool Encryption::loadPublicKey(const char* key_pem, BCRYPT_KEY_HANDLE* key) {
+	NTSTATUS status;
 	BCRYPT_ALG_HANDLE hAlg = NULL;
-	BCRYPT_KEY_HANDLE hKey = NULL;
 
-	if (BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RSA_ALGORITHM, NULL, 0) != 0) {
-		return NULL;
+	size_t pemLen = strlen(key_pem);
+	HANDLE heap = GetProcessHeap();
+
+	char* b64Clean = (char*)HeapAlloc(heap, HEAP_ZERO_MEMORY, pemLen + 1);
+	if (!b64Clean){ 	
+		return false;
 	}
 
-	if (BCryptImportKeyPair(hAlg, NULL, LEGACY_RSAPUBLIC_BLOB, &hKey, blobBuffer, blobLen, 0) != 0) {
-		BCryptCloseAlgorithmProvider(hAlg, 0);
-		return NULL;
+	size_t cleanIndex = 0;
+	for (size_t i = 0; i < pemLen; i++) {
+		if (key_pem[i] == '-') {
+			while (i < pemLen && key_pem[i] != '\n') i++;
+			continue;
+		}
+		char c = key_pem[i];
+		if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+			b64Clean[cleanIndex++] = c;
+		}
 	}
 
+	BYTE* derbytes = (BYTE*)HeapAlloc(heap, HEAP_ZERO_MEMORY, cleanIndex);
+	if (!derbytes) {
+		HeapFree(heap, 0, b64Clean);
+		return false;
+	}
+
+	size_t derLen = this->base64Decode(b64Clean, cleanIndex, derbytes);
+	HeapFree(heap, 0, b64Clean);
+
+	if (derLen == 0) {
+		HeapFree(heap, 0, derbytes);
+		return false;
+	}
+
+	BYTE* srcmod = NULL;
+	BYTE* srcexp = NULL;
+	ULONG modules = 0;
+	ULONG exponent = 0;
+
+	if (!this->extractRsaParamsFromDerPublic(derbytes, derLen, &srcmod, &modules, &srcexp, &exponent)) {
+		HeapFree(heap, 0, derbytes);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	// BCrypt Blob Layout: BCRYPT_RSAKEY_BLOB + Exponent + Modulus
+	ULONG blobLen = sizeof(BCRYPT_RSAKEY_BLOB) + exponent + modules;
+	BCRYPT_RSAKEY_BLOB* header = (BCRYPT_RSAKEY_BLOB*)HeapAlloc(heap, HEAP_ZERO_MEMORY, blobLen);
+
+	header->Magic = BCRYPT_RSAPUBLIC_MAGIC;
+	header->BitLength = modules * 8;
+	header->cbPublicExp = exponent;
+	header->cbModulus = modules;
+
+	BYTE* destExp = ((BYTE*)header) + sizeof(BCRYPT_RSAKEY_BLOB);
+	BYTE* destMod = destExp + exponent;
+
+	memcpy(destExp, srcexp, exponent);
+	memcpy(destMod, srcmod, modules);
+
+	HeapFree(heap, 0, derbytes);
+
+	status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RSA_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
+	if (status) {
+		HeapFree(heap, 0, header);
+		return false;
+	}
+
+	BCryptImportKeyPair(hAlg, NULL, BCRYPT_RSAPUBLIC_BLOB, key, (PUCHAR)header, blobLen, 0);
+
+	HeapFree(heap, 0, header);
 	BCryptCloseAlgorithmProvider(hAlg, 0);
-	return hKey;
+	return true;
 }
+
+bool Encryption::extractRsaParamsFromDerPublic(const BYTE* der, size_t derLen, BYTE** modules_pp, ULONG* modules_pcb, BYTE** exponent_pp, ULONG* exponent_pcb) {
+	if (!der || derLen < 64) return false;
+
+	size_t index = 0;
+
+	auto parseLength = [&der, &index, derLen](ULONG* pLength) -> BOOL {
+		if (index >= derLen) return false;
+		BYTE lenByte = der[index++];
+		if (lenByte & 0x80) {
+			BYTE numBytes = lenByte & 0x7F;
+			if (numBytes == 0 || numBytes > 4 || index + numBytes > derLen) return false;
+			ULONG len = 0;
+			for (BYTE i = 0; i < numBytes; i++) {
+				len = (len << 8) | der[index++];
+			}
+			*pLength = len;
+		}
+		else {
+			*pLength = lenByte;
+		}
+		return true;
+		};
+
+	ULONG len = 0;
+
+	// tkae outer sequence (0x30)
+	if (index >= derLen || der[index++] != 0x30 || !parseLength(&len)) return false;
+
+	// take algorithmIdentifier sequence (0x30)
+	if (index >= derLen || der[index++] != 0x30) return false;
+	ULONG algLen = 0;
+	if (!parseLength(&algLen)) return false;
+	index += algLen; // skip algorithm details OID
+
+	// take bit string tag (0x03)
+	if (index >= derLen || der[index++] != 0x03) return false;
+	ULONG bitStrLen = 0;
+	if (!parseLength(&bitStrLen)) return false;
+
+	// skip bit string padding byte (0x00)
+	if (index >= derLen || der[index++] != 0x00) return false;
+
+	// take inner RSAPublicKey sequence (0x30)
+	if (index >= derLen || der[index++] != 0x30) return false;
+	ULONG rsaSeqLen = 0;
+	if (!parseLength(&rsaSeqLen)) return false;
+
+	// take modulus INTEGER Tag (0x02)
+	if (index >= derLen || der[index++] != 0x02) return false;
+	ULONG modLen = 0;
+	if (!parseLength(&modLen)) return false;
+
+	if (index + modLen > derLen) return false;
+	BYTE* pMod = (BYTE*)&der[index];
+	index += modLen;
+
+	// strip leading 0x00 byte (257 bytes -> 256 bytes for 2048-bit modulus)
+	if (modLen > 0 && pMod[0] == 0x00) {
+		pMod++;
+		modLen--;
+	}
+
+	// take exponent integer Tag (0x02)
+	if (index >= derLen || der[index++] != 0x02) return false;
+	ULONG expLen = 0;
+	if (!parseLength(&expLen)) return false;
+
+	if (index + expLen > derLen) return false;
+	BYTE* pExp = (BYTE*)&der[index];
+
+	if (expLen > 0 && pExp[0] == 0x00) {
+		pExp++;
+		expLen--;
+	}
+
+	*modules_pp = pMod;
+	*modules_pcb = modLen;   // 256 bytes
+	*exponent_pp = pExp;
+	*exponent_pcb = expLen;  // 3 bytes
+
+	return true;
+}
+
+bool Encryption::ExtractRsaParamsFromDerPrivate(const BYTE* der, size_t derLen, RSA_PRIVATE_PARAMS* params) {
+	if (!der || derLen < 128) {
+		return false;
+	}
+
+	size_t index = 0;
+	auto parseLength = [&der, &index, derLen](ULONG* pLength) -> BOOL {
+		if (index >= derLen) {
+			return false;
+		}
+		BYTE lenByte = der[index++];
+		if (lenByte & 0x80) {
+			BYTE numBytes = lenByte & 0x7F;
+			if (numBytes == 0 || numBytes > 4 || index + numBytes > derLen) {
+				return false;
+			}
+			ULONG len = 0;
+			for (BYTE i = 0; i < numBytes; i++) {
+				len = (len << 8) | der[index++];
+			}
+			*pLength = len;
+		}
+		else {
+			*pLength = lenByte;
+		}
+		return true;
+		};
+
+	auto parseInteger = [&der, &index, derLen, &parseLength](BYTE** ppVal, ULONG* pCb) -> BOOL {
+		if (index >= derLen || der[index++] != 0x02) {
+			return false;
+		}
+		ULONG len = 0;
+		if (!parseLength(&len) || index + len > derLen) {
+			return false;
+		}
+
+		BYTE* pData = (BYTE*)&der[index];
+		index += len;
+
+		if (len > 0 && pData[0] == 0x00) {
+			pData++;
+			len--;
+		}
+
+		*ppVal = pData;
+		*pCb = len;
+		return true;
+		};
+
+	ULONG len = 0;
+	if (index >= derLen || der[index++] != 0x30 || !parseLength(&len)) {
+		return false;
+	}
+
+	BYTE* pVer = NULL;
+	ULONG cbVer = 0;
+	if (!parseInteger(&pVer, &cbVer)) {
+		return false;
+	}
+
+	if (index >= derLen || der[index++] != 0x30) {
+		return false;
+	}
+	ULONG algLen = 0;
+	if (!parseLength(&algLen)) {
+		return false;
+	}
+	index += algLen;
+
+	if (index >= derLen || der[index++] != 0x04) {
+		return false;
+	}
+
+	ULONG octetLen = 0;
+	if (!parseLength(&octetLen)) {
+		return false;
+	}
+
+	if (index >= derLen || der[index++] != 0x30) {
+		return false;
+	}
+
+	ULONG rsaSeqLen = 0;
+	if (!parseLength(&rsaSeqLen)) {
+		return false;
+	}
+
+	if (!parseInteger(&pVer, &cbVer)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->mod_p, &params->mod_bytes)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->exp_p, &params->exp_bytes)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->priv_exp_p, &params->priv_exp_bytes)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->p, &params->p_bytes)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->q, &params->q_bytes)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->dp, &params->dp_bytes)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->dq, &params->dq_bytes)) {
+		return false;
+	}
+
+	if (!parseInteger(&params->inv, &params->inv_bytes)) {
+		return false;
+	}
+
+	return true;
+}
+
+// base64 decode
+size_t Encryption::base64Decode(const char* src, size_t srcLen, BYTE* dest) {
+	static const int b64inv[256] = {
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
+	52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,
+	-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
+	15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
+	-1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+	41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1
+	};
+
+	size_t outLen = 0;
+	DWORD val = 0;
+	int valb = -8;
+
+	for (size_t i = 0; i < srcLen; i++) {
+		unsigned char c = (unsigned char)src[i];
+		if (c == '=') break;
+
+		int d = b64inv[c];
+		if (d == -1) continue;
+
+		val = (val << 6) | d;
+		valb += 6;
+
+		if (valb >= 0) {
+			dest[outLen++] = (BYTE)((val >> valb) & 0xFF);
+			valb -= 8;
+		}
+	}
+	return outLen;
+}
+
 
 // aes functions
 bool Encryption::generateIv(unsigned char* ivBuffer) {
