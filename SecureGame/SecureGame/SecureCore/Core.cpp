@@ -73,6 +73,10 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
 		SecureZeroMemory(&outEnvelope, sizeof(envelope));
 
 		bool success = enc.buildEnvelope(reinterpret_cast<unsigned char*>(&playerMovement), sizeof(mv), enclavePrivateKey, serverPublicKey, &outEnvelope);
+		
+		if (!success) {
+			return &success;
+		}
 
 		SecureZeroMemory(&playerMovement, sizeof(mv));
 		SecureZeroMemory(input->buffer, sizeof(envelope));
@@ -139,22 +143,6 @@ extern "C" __declspec(dllexport) void* CALLBACK GameTick(PVOID context)
 		SecureZeroMemory(decrypted, PACKET_MAX);
 		memcpy(input->buffer, &output, sizeof(EnclaveOutput));
 		
-		/*
-        unsigned char plaintext[64];
-		if (input->cipherLen <= 0) {
-            return nullptr;
-        }
-        int plaintext_len = enc.AES_decrypt((unsigned char*)input->buffer, input->cipherLen, plaintext);
-        if (plaintext_len < 0) {
-            return nullptr;
-        }
-
-        memset(input->buffer, 0, 64);
-        memcpy(input->buffer, plaintext, plaintext_len);
-
-		SecureZeroMemory(plaintext, sizeof(char)* 64);
-		SecureZeroMemory(ciphertext, sizeof(char) *64);
-		*/
     }
 
     return nullptr;

@@ -103,7 +103,7 @@ int Client::receive_packet(void* buffer, uint16_t packet_size) {
 	}
 
 	uint16_t net_len = ntohs(net_recv);
-	if (net_len > PACKET_MAX) { // was 256, since PACKET_MAX was defined as 256 but updaed to 64 after added encryption features
+	if (net_len > sizeof(envelope)) { // was 256, since PACKET_MAX was defined as 256 but updaed to 64 after added encryption features
 		fputs("packet size limit exceed", stdout);
 		return 0;
 	}

@@ -1,6 +1,7 @@
 #include "Encryption.h"
 
 const char* test_key = "abcdefghijklmnopqrstuvwxyzzyxwvu";
+const char* test_iv = "zyxwvutsabcdefgh";
 
 Encryption::Encryption() {
 
@@ -417,12 +418,6 @@ size_t Encryption::base64Decode(const char* src, size_t srcLen, BYTE* dest) {
 	return outLen;
 }
 
-
-// aes functions
-bool Encryption::generateIv(unsigned char* ivBuffer) {
-	return BCryptGenRandom(NULL, ivBuffer, IV_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-}
-
 int Encryption::AES_encrypt(unsigned char* plaintext, int plaintext_len, const unsigned char* iv, const unsigned char* key, unsigned char* ciphertext) {
 	BCRYPT_ALG_HANDLE hAlg = NULL;
 	BCRYPT_KEY_HANDLE hKey = NULL;
@@ -570,7 +565,8 @@ bool Encryption::verifySignedHash(BCRYPT_KEY_HANDLE hPubKey, const envelope* env
 
 // envelope functions
 bool Encryption::buildEnvelope(unsigned char* plaintext, int plaintext_len, BCRYPT_KEY_HANDLE hSenderPrivKey, BCRYPT_KEY_HANDLE hReceiverPubKey, envelope* packet_buffer) {
-	if (!generateIv(packet_buffer->iv)) return false;
+	
+	memcpy(packet_buffer->iv, test_iv, IV_SIZE);
 
 	// Encrypt payload with AES-256-CBC
 	int cipher_len = AES_encrypt(plaintext, plaintext_len, packet_buffer->iv, (const unsigned char*)test_key, packet_buffer->packet);

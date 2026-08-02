@@ -60,7 +60,6 @@ private:
     size_t base64Decode(const char*, size_t, BYTE*);
 
     // aes functions
-    bool generateIv(unsigned char*);
     int AES_encrypt(unsigned char*, int, const unsigned char*, const unsigned char*, unsigned char*);
     int AES_decrypt(unsigned char*, int, const unsigned char*, const unsigned char*, unsigned char*);
 

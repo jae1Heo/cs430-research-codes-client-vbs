@@ -80,7 +80,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         return 1;
 
     Game game = Game();
-    Client client = Client("192.168.0.198", 12345); // private IP from testing environment, change this if needed
+    Client client = Client("192.168.123.108", 12345); // private IP from testing environment, change this if needed
 
     if (!game.Init(&client))
         return 1;
