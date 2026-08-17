@@ -23,7 +23,9 @@ Client::Client(const char* ip, const unsigned short u_port)
 	this->clntAddr.sin_family = AF_INET;
 	this->clntAddr.sin_port = htons(u_port);
 	this->clntAddr.sin_addr.S_un.S_addr = inet_addr(ip);
-
+	
+	int flag = 1;
+	setsockopt(this->sock, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
 	this->connected = false;
 	this->status = 0;
 	this->clnt_number = 0;
